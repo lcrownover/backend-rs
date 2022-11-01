@@ -1,22 +1,71 @@
-use axum::{routing::get, Router};
-use backend_rs::JSONLoader;
-use backend_rs::Loader;
-use backend_rs::TaskList;
+use actix_web::{delete, get, post, web::Path, App, HttpResponse, HttpServer, Responder};
+use backend_rs::{DataHandler, JSONHandler, TaskInput};
 
-#[tokio::main]
-async fn main() {
-    let app = Router::new()
-        .route("/", get(|| async { "welcome" }))
-        .route("/tasks", get(get_all_tasks));
-
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+#[get("/")]
+async fn hello() -> impl Responder {
+    HttpResponse::Ok().body("welcome!")
 }
 
-async fn get_all_tasks() -> TaskList {
+#[get("/tasks")]
+async fn get_all_tasks() -> impl Responder {
     let json_filepath = "/Users/lcrown/temp/tasklist.json";
-    let loader = JSONLoader::new(&json_filepath);
-    loader.load().unwrap()
+    let loader = JSONHandler::new(&json_filepath);
+    let data = loader.load().unwrap();
+    let resp_text = match serde_json::to_string(&data) {
+        Ok(t) => t,
+        Err(_) => "failed to parse json".to_owned(),
+    };
+    HttpResponse::Ok().body(resp_text)
+}
+
+#[get("/tasks/{id}")]
+async fn get_task(path: Path<(u32,)>) -> impl Responder {
+    let task_id = path.into_inner().0;
+    let json_filepath = "/Users/lcrown/temp/tasklist.json";
+    let loader = JSONHandler::new(&json_filepath);
+    let task_list = loader.load().unwrap();
+    let task = task_list.get_by_id(task_id).unwrap();
+    let resp_text = match task.to_string() {
+        Ok(t) => t,
+        Err(_) => "failed to parse json".to_owned(),
+    };
+    HttpResponse::Ok().body(resp_text)
+}
+
+#[post("/tasks")]
+async fn add_task(req_body: String) -> impl Responder {
+    let json_filepath = "/Users/lcrown/temp/tasklist.json";
+    let handler = JSONHandler::new(&json_filepath);
+    let mut task_list = handler.load().unwrap();
+    let new_task = serde_json::from_str::<TaskInput>(&req_body).unwrap();
+    task_list.add(new_task);
+    handler.save(&task_list).unwrap();
+    HttpResponse::Ok().body(task_list.to_string().unwrap())
+}
+
+#[delete("/tasks/{id}")]
+async fn delete_task(path: Path<(u32,)>) -> impl Responder {
+    let json_filepath = "/Users/lcrown/temp/tasklist.json";
+    let handler = JSONHandler::new(&json_filepath);
+    let mut task_list = handler.load().unwrap();
+    let task_id = path.into_inner().0;
+    println!("removing id: {}", task_id);
+    task_list.remove_by_id(task_id);
+    handler.save(&task_list).unwrap();
+    HttpResponse::Ok().body(task_list.to_string().unwrap())
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .service(hello)
+            .service(get_all_tasks)
+            .service(get_task)
+            .service(add_task)
+            .service(delete_task)
+    })
+    .bind(("0.0.0.0", 8000))?
+    .run()
+    .await
 }
