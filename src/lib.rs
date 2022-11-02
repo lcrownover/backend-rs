@@ -1,7 +1,22 @@
+use derive_more::Display;
 use serde_derive::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+
+#[derive(Debug, Display)]
+pub enum BackendError {
+    #[display(fmt = "internal error")]
+    InternalError,
+
+    #[display(fmt = "bad request")]
+    BadClientData,
+
+    #[display(fmt = "timeout")]
+    Timeout,
+}
+
+impl actix_web::error::ResponseError for BackendError {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskInput {
@@ -17,11 +32,8 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn to_string(&self) -> Result<String, Box<dyn Error>> {
-        let s = match serde_json::to_string(&self) {
-            Ok(t) => t,
-            Err(_) => "failed to parse json".to_owned(),
-        };
+    pub fn to_json(&self) -> Result<String, Box<dyn Error>> {
+        let s = serde_json::to_string(&self)?;
         Ok(s)
     }
 }
@@ -50,19 +62,17 @@ impl TaskList {
     }
 
     pub fn get_by_id(&self, id: u32) -> Option<Task> {
-        let task = self.tasks
-            .iter()
-            .find(|t| t.id == id);
-        match task {
-            None => None,
-            Some(t) => Some(t.to_owned()),
-        }
+        let task = match self.tasks.iter().find(|t| t.id == id) {
+            Some(t) => t,
+            None => return None,
+        };
+        return Some(task.to_owned());
     }
 
-    pub fn to_string(&self) -> Result<String, Box<dyn Error>> {
+    pub fn to_string(&self) -> Result<String, BackendError> {
         let s = match serde_json::to_string(&self) {
             Ok(t) => t,
-            Err(_) => return Box::new(Err("failed to parse json")),
+            Err(_) => return Err(BackendError::BadClientData),
         };
         Ok(s)
     }

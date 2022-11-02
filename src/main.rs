@@ -1,20 +1,8 @@
-use actix_web::{delete, get, post, web::Path, App, HttpResponse, HttpServer, Responder, error::Error, error::ResponseError};
-use backend_rs::{DataHandler, JSONHandler, TaskInput};
-use derive_more::Display;
-
-#[derive(Debug, Display)]
-enum BackendError {
-    #[display(fmt = "internal error")]
-    InternalError,
-
-    #[display(fmt = "bad request")]
-    BadClientData,
-
-    #[display(fmt = "timeout")]
-    Timeout,
-}
-
-impl actix_web::error::ResponseError for MyError {}
+use actix_web::{
+    delete, error::Error, get, post, web::Path, App, HttpResponse,
+    HttpServer, Responder
+};
+use backend_rs::{DataHandler, JSONHandler, TaskInput, BackendError};
 
 #[get("/")]
 async fn hello() -> impl Responder {
@@ -22,7 +10,7 @@ async fn hello() -> impl Responder {
 }
 
 #[get("/tasks")]
-async fn get_all_tasks() -> impl Responder {
+async fn get_all_tasks() -> Result<HttpResponse, BackendError> {
     let json_filepath = "/Users/lcrown/temp/tasklist.json";
     let loader = JSONHandler::new(&json_filepath);
     let data = loader.load().unwrap();
@@ -30,7 +18,7 @@ async fn get_all_tasks() -> impl Responder {
         Ok(t) => t,
         Err(_) => "failed to parse json".to_owned(),
     };
-    HttpResponse::Ok().body(resp_text)
+    Ok(HttpResponse::Ok().body(resp_text))
 }
 
 #[get("/tasks/{id}")]
@@ -39,8 +27,11 @@ async fn get_task(path: Path<(u32,)>) -> Result<HttpResponse, BackendError> {
     let json_filepath = "/Users/lcrown/temp/tasklist.json";
     let loader = JSONHandler::new(&json_filepath);
     let task_list = loader.load().unwrap();
-    let task = task_list.get_by_id(task_id).ok_or(Err(BackendError::InternalError));
-    let resp_text = task.to_string()?;
+    let task = match task_list.get_by_id(task_id) {
+        Some(t) => t,
+        None => return Err(BackendError::BadClientData)
+    };
+    let resp_text = task.to_json().unwrap();
     Ok(HttpResponse::Ok().body(resp_text))
 }
 
