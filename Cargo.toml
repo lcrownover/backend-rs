@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 actix-web = "4.2.1"
 axum = "0.5.17"
+derive_more = "0.99.17"
 serde = "1.0.147"
 serde_derive = "1.0.147"
 serde_json = "1.0.87"

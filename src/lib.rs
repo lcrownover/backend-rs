@@ -49,18 +49,20 @@ impl TaskList {
         self.tasks.retain(|t| t.id != id)
     }
 
-    pub fn get_by_id(&self, id: u32) -> Result<Task, Box<dyn Error>> {
+    pub fn get_by_id(&self, id: u32) -> Option<Task> {
         let task = self.tasks
             .iter()
-            .find(|t| t.id == id)
-            .expect("no task found");
-        Ok(task.to_owned())
+            .find(|t| t.id == id);
+        match task {
+            None => None,
+            Some(t) => Some(t.to_owned()),
+        }
     }
 
     pub fn to_string(&self) -> Result<String, Box<dyn Error>> {
         let s = match serde_json::to_string(&self) {
             Ok(t) => t,
-            Err(_) => "failed to parse json".to_owned(),
+            Err(_) => return Box::new(Err("failed to parse json")),
         };
         Ok(s)
     }
