@@ -1,4 +1,4 @@
-use actix_web::{delete, get, post, web::Path, App, HttpResponse, HttpServer, Responder};
+use actix_web::{delete, get, post, web::Path, App, HttpResponse, HttpServer, Responder, error::ResponseError};
 use backend_rs::{DataHandler, JSONHandler, TaskInput};
 
 #[get("/")]
@@ -24,7 +24,10 @@ async fn get_task(path: Path<(u32,)>) -> impl Responder {
     let json_filepath = "/Users/lcrown/temp/tasklist.json";
     let loader = JSONHandler::new(&json_filepath);
     let task_list = loader.load().unwrap();
-    let task = task_list.get_by_id(task_id).unwrap();
+    let task = match task_list.get_by_id(task_id) {
+        Ok(t) => t,
+        Err(_) => return HttpResponse::InternalServerError().body("no task found"),
+    };
     let resp_text = match task.to_string() {
         Ok(t) => t,
         Err(_) => "failed to parse json".to_owned(),
@@ -37,7 +40,10 @@ async fn add_task(req_body: String) -> impl Responder {
     let json_filepath = "/Users/lcrown/temp/tasklist.json";
     let handler = JSONHandler::new(&json_filepath);
     let mut task_list = handler.load().unwrap();
-    let new_task = serde_json::from_str::<TaskInput>(&req_body).unwrap();
+    let new_task = match serde_json::from_str::<TaskInput>(&req_body) {
+        Ok(t) => t,
+        Err(_) => return HttpResponse::BadRequest().body("invalid task input"),
+    };
     task_list.add(new_task);
     handler.save(&task_list).unwrap();
     HttpResponse::Ok().body(task_list.to_string().unwrap())
